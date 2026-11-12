@@ -1,40 +1,42 @@
-# Hong Kong Passenger Flow Forecast — Research Demo
+# Hong Kong Passenger Flow Forecast — v2 Research Demo
 
-A lightweight proof of concept showing how to fetch public daily passenger traffic, evaluate a predictive baseline, and forecast the next three days. Designed as a technical demonstration for an MSc research discussion, **not** an operational MTR congestion system.
+A reproducible Streamlit proof of concept for a Hong Kong University MSc research discussion. It predicts **daily immigration-clearance passenger trips**, **not** MTR station occupancy or congestion.
 
-## Data
-- Official source: [Hong Kong Immigration Department — Statistics on Daily Passenger Traffic](https://data.gov.hk/en-data/dataset/hk-immd-set5-statistics-daily-passenger-traffic)
-- CSV: https://www.immd.gov.hk/opendata/eng/transport/immigration_clearance/statistics_on_daily_passenger_traffic.csv
-- Fields: Date (DD-MM-YYYY), Control Point, Arrival / Departure, Hong Kong Residents, Mainland Visitors, Other Visitors, Total.
-- Observations represent immigration clearance **trips**, not unique passengers or MTR entries.
+## Features
 
-## What the demo does
-1. Loads the official CSV at runtime (cached 1 hour).
-2. Aggregates total daily passenger trips; filter by control point and direction.
-3. Builds two forecasting benchmarks: same-weekday seasonal naive and calendar-feature Random Forest.
-4. Performs a chronological held-out backtest and displays MAE / RMSE.
-5. Forecasts the next 1–14 days (default 3), plus interactive plots.
+- Official Hong Kong Immigration Department daily CSV ingest and optional offline snapshot fallback.
+- Filter by border control point and arrival/departure.
+- Forecast 1–14 days with **Seasonal Naive**, **Random Forest**, or **PyTorch LSTM**.
+- Compare all three on a **common chronological 30-day holdout**, reporting MAE and RMSE, a grouped comparison chart, and actual vs predicted test plot.
+- Automatically generated research conclusion based on the measured test metrics and an explicit MTR research-extension roadmap.
 
 ## Run locally
+
 ```bash
 python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-If the official URL cannot be downloaded from your network, save the English CSV as `data/passenger_traffic.csv`. This file is intentionally not bundled; do not treat an old snapshot as live data.
+First execution trains the LSTM (CPU). Streamlit caches results for an hour per selected data/filter combination. The LSTM uses 28 lagged days, a fit-only scaler, pre-test validation for early stopping, and no target values from the test interval during fitting. Holdout predictions are **rolling one-day ahead**, with the true past known through the previous day. Future multi-day forecasts are **recursive**; the 30-day holdout score is **not** a validated 14-day recursive forecast score. Model errors are not guaranteed to be stable across time.
 
-## Publish on your GitHub and deploy Streamlit
-1. Create a public GitHub repository, e.g. `hk-passenger-flow-demo`.
-2. Upload `app.py`, `requirements.txt`, and `README.md` to its default branch.
-3. Go to https://share.streamlit.io/ and choose **Create app** → **From existing repo**. Select your repository, branch, and entrypoint `app.py`.
-4. Deploy. Share both your GitHub repository URL and the deployed Streamlit app URL with your supervisor.
-5. If the remote CSV cannot be fetched in cloud hosting, put an authorized local snapshot at `data/passenger_traffic.csv` and describe its date clearly. Do not silently show synthetic data as official observations.
+## Deploy via Streamlit Community Cloud
+
+1. Push **`app.py`, `forecasting.py`, `requirements.txt`, `README.md`** to the root of the `main` branch of `exefyx/hk-passenger-flow-prediction`.
+2. Open https://share.streamlit.io/ → the existing deployed app → **Manage app** → **Reboot** after new commits (usually auto-updates).
+3. Confirm the `torch` CPU installation and first-run training succeed in the deployment logs. Streamlit Community Cloud memory/CPU restrictions can make first LSTM run slower.
+4. Confirm the metrics and model dropdown on https://hk-passenger-flow-prediction.streamlit.app/.
+
+## Data source
+
+- [Official dataset page](https://data.gov.hk/en-data/dataset/hk-immd-set5-statistics-daily-passenger-traffic)
+- [Official CSV](https://www.immd.gov.hk/opendata/eng/transport/immigration_clearance/statistics_on_daily_passenger_traffic.csv)
+- Fields: Date (DD-MM-YYYY), Control Point, Arrival / Departure, Total. The data reflect **clearance trips**, not unique persons or railway entries.
+- If official CSV downloading is restricted by the host, optionally add an authorized snapshot at `data/passenger_traffic.csv` and identify it as a snapshot. A snapshot is not live data.
 
 ## Research limitations
-- These are historical official clearance volumes, not real-time railway station flows or train headways.
-- Calendar-only models are simple demonstrations. They should be compared with stronger baselines, seasonality and event controls using a longer historical period.
-- A temporal holdout is shown, but a robust study should use rolling-origin backtesting, station-level data, and external operational covariates.
-- This repository is original demo scaffolding; it does not copy external project's code.
+
+This is a technical demonstration, not a production-grade MTR operation or dispatch system. It has no real-time station input, train-headway information, simulation, exogenous variables, or congestion interventions. Before production use: rolling-origin and multi-horizon validation, checking coverage bias and data leakage, and cross-station evaluation would be required. The Streamlit app learns on each filter setting and only displays one 30-day test period.
 
 ## License
-Project source under MIT License (see LICENSE). Official government data remains subject to its own terms and attribution requirements.
+
+Original demo code MIT. The government dataset remains subject to its own terms and attribution requirements.
