@@ -86,6 +86,10 @@ The fitted models produce the following three-day forecasts:
 
 In the four expanding-window validation forecasts, arrival GPR achieved MAE 22,994 and MAPE 4.52%, compared with MAE 24,660 and MAPE 4.86% for Seasonal Naive. Departure GPR achieved MAE 20,353 and MAPE 4.22%, compared with MAE 21,061 and MAPE 4.38%. For total flow, GPR achieved MAE 29,965, RMSE 36,733 and MAPE 3.16%, while Seasonal Naive achieved MAE 32,272, RMSE 38,259 and MAPE 3.41%. These small differences are exploratory because the validation set contains only four dates.
 
+### 6.1 Post-forecast audit
+
+The Immigration Department subsequently published the observations for 12-14 November. They were not used for training or hyperparameter fitting. Actual total flows were 948,856, 1,110,644 and 1,274,860 passenger trips. The absolute errors were 60,255, 69,637 and 43,427, giving a three-day MAE of 57,773 and MAPE of 5.34%. The first and third observations fell inside the approximate 95% intervals. The 13 November observation exceeded the upper bound by about 613 trips, showing that the independence assumption used to combine arrival and departure uncertainty is slightly too narrow for that date.
+
 Results should be presented in this order:
 
 1. Table of the eleven official observations.
