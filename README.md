@@ -1,14 +1,48 @@
-# Hong Kong Passenger Flow Forecast — v2 Research Demo
+# Hong Kong Passenger Flow Forecast
 
-A reproducible Streamlit proof of concept for a Hong Kong University MSc research discussion. It predicts **daily immigration-clearance passenger trips**, **not** MTR station occupancy or congestion.
+A reproducible MSc research demonstration that uses official Hong Kong Immigration Department data from **1-11 November 2026** to forecast arrivals, departures and total clearance trips for the following three days.
 
-## Features
+The current stage uses **Gaussian Process Regression (GPR)** with a fixed seven-day periodic kernel. It does not claim to predict MTR station crowding: immigration-clearance trips are a public proxy dataset, while the dissertation ultimately requires station-level passenger flow, train-headway data and a congestion-control simulation.
 
-- Official Hong Kong Immigration Department daily CSV ingest and optional offline snapshot fallback.
-- Filter by border control point and arrival/departure.
-- Forecast 1–14 days with **Seasonal Naive**, **Random Forest**, or **PyTorch LSTM**.
-- Compare all three on a **common chronological 30-day holdout**, reporting MAE and RMSE, a grouped comparison chart, and actual vs predicted test plot.
-- Automatically generated research conclusion based on the measured test metrics and an explicit MTR research-extension roadmap.
+## Current research question
+
+Can a small probabilistic machine-learning model extract a weekly pattern from eleven official daily observations and produce transparent three-day forecasts with uncertainty?
+
+## Why the technology stack was changed
+
+The first version compared Seasonal Naive, Random Forest and a PyTorch LSTM using a 28-day lookback and a 30-day test set. That design contradicted the stated eleven-day study window. An LSTM cannot form a 28-day input sequence from eleven observations, and adding PyTorch substantially increases deployment time without solving the data shortage. Random Forest also provides no native predictive distribution and does not encode the known seven-day cycle directly.
+
+The revised stack is deliberately smaller:
+
+| Component | Technology | Purpose |
+|---|---|---|
+| Data retrieval | Requests | Download the official CSV with an optional authorized local fallback |
+| Data processing | Pandas and NumPy | Parse dates, aggregate all control points, and separate arrival and departure flows |
+| Machine learning | scikit-learn GPR | Learn a weekly periodic relationship and return forecast mean and uncertainty |
+| Interface | Streamlit | Present the fixed study data, forecasts and validation results |
+| Visualization | Plotly | Plot observations, forecasts and approximate 95% intervals |
+| Testing | unittest | Check the fixed period, rolling validation and interval ordering |
+
+PyTorch, Random Forest and LSTM have been removed from the current prototype. They may become relevant only after authorized high-frequency station data are available.
+
+## Method
+
+Two GPR models are fitted independently: one for arrivals and one for departures. Their mean forecasts are summed to produce total daily flow.
+
+The covariance kernel is:
+
+`ConstantKernel × ExpSineSquared(periodicity=7 days) + WhiteKernel`
+
+- `ExpSineSquared` represents weekly repetition.
+- The period is fixed at seven days because eleven samples are insufficient to estimate it reliably.
+- `ConstantKernel` learns the signal amplitude.
+- `WhiteKernel` represents unexplained observation noise.
+- `normalize_y=True` stabilizes optimization when passenger counts are large.
+- The model returns a predictive standard deviation, which is converted to a 95% interval.
+
+Validation uses an expanding time window. Days 1-7 predict day 8, days 1-8 predict day 9, and so on through day 11. This produces only four validation forecasts, so the metrics are exploratory.
+
+When the official source contains observations for 12-14 November, the application shows a separate post-forecast audit. Those values are never supplied to model fitting.
 
 ## Run locally
 
@@ -17,26 +51,31 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-First execution trains the LSTM (CPU). Streamlit caches results for an hour per selected data/filter combination. The LSTM uses 28 lagged days, a fit-only scaler, pre-test validation for early stopping, and no target values from the test interval during fitting. Holdout predictions are **rolling one-day ahead**, with the true past known through the previous day. Future multi-day forecasts are **recursive**; the 30-day holdout score is **not** a validated 14-day recursive forecast score. Model errors are not guaranteed to be stable across time.
+Run tests:
 
-## Deploy via Streamlit Community Cloud
-
-1. Push **`app.py`, `forecasting.py`, `requirements.txt`, `README.md`** to the root of the `main` branch of `exefyx/hk-passenger-flow-prediction`.
-2. Open https://share.streamlit.io/ → the existing deployed app → **Manage app** → **Reboot** after new commits (usually auto-updates).
-3. Confirm the `torch` CPU installation and first-run training succeed in the deployment logs. Streamlit Community Cloud memory/CPU restrictions can make first LSTM run slower.
-4. Confirm the metrics and model dropdown on https://hk-passenger-flow-prediction.streamlit.app/.
+```bash
+python -m unittest discover -s tests
+```
 
 ## Data source
 
 - [Official dataset page](https://data.gov.hk/en-data/dataset/hk-immd-set5-statistics-daily-passenger-traffic)
 - [Official CSV](https://www.immd.gov.hk/opendata/eng/transport/immigration_clearance/statistics_on_daily_passenger_traffic.csv)
-- Fields: Date (DD-MM-YYYY), Control Point, Arrival / Departure, Total. The data reflect **clearance trips**, not unique persons or railway entries.
-- If official CSV downloading is restricted by the host, optionally add an authorized snapshot at `data/passenger_traffic.csv` and identify it as a snapshot. A snapshot is not live data.
+- Required fields: `Date`, `Arrival / Departure`, and `Total`
 
-## Research limitations
+The records are clearance trips, not unique persons, railway entries, train loads or platform occupancy.
 
-This is a technical demonstration, not a production-grade MTR operation or dispatch system. It has no real-time station input, train-headway information, simulation, exogenous variables, or congestion interventions. Before production use: rolling-origin and multi-horizon validation, checking coverage bias and data leakage, and cross-station evaluation would be required. The Streamlit app learns on each filter setting and only displays one 30-day test period.
+## Dissertation extension
+
+The full MSc project requires three later modules that are outside the public-data prototype:
+
+1. Station-level passenger forecasting using authorized 5-15 minute entry, exit, transfer and platform-count data.
+2. Train-headway forecasting using train event or AVL data along the line.
+3. A simulation environment that tests holding, dispatching, passenger-flow control or skip-stop policies against waiting time and platform crowding.
+
+See [REPORT.md](REPORT.md) for the literature review, report structure and implementation roadmap.
 
 ## License
 
-Original demo code MIT. The government dataset remains subject to its own terms and attribution requirements.
+Original project code is MIT licensed. The government dataset and cited papers remain subject to their own terms and attribution requirements.
+

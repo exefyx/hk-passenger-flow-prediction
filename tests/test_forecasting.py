@@ -1,33 +1,34 @@
 import unittest
+
 import numpy as np
 import pandas as pd
-from forecasting import make_windows, same_weekday_forecast, evaluate_models, predict_future
+
+from forecasting import forecast_series, fit_gpr, rolling_origin_evaluation
+
 
 class ForecastTests(unittest.TestCase):
     def setUp(self):
-        idx = pd.date_range('2025-01-01', periods=220)
-        vals = 1000 + 190 * np.sin(2*np.pi*idx.dayofweek.to_numpy()/7) + np.arange(220)*.12
-        self.series = pd.Series(vals, index=idx)
+        index = pd.date_range("2026-11-01", periods=11)
+        values = 1_000 + 180 * np.cos(2 * np.pi * np.arange(11) / 7)
+        self.series = pd.Series(values, index=index)
 
-    def test_windows(self):
-        x, y = make_windows(np.arange(40), 28)
-        self.assertEqual(x.shape, (12,28,1))
-        self.assertEqual(y.shape, (12,1))
+    def test_gpr_fit_uses_fixed_weekly_period(self):
+        fit = fit_gpr(self.series)
+        self.assertIn("periodicity=7", str(fit.model.kernel_))
 
-    def test_seasonal(self):
-        dates = pd.date_range(self.series.index[-1]+pd.Timedelta(days=1), periods=3)
-        preds = same_weekday_forecast(self.series, dates)
-        self.assertEqual(len(preds),3)
-        self.assertTrue(np.all(preds > 0))
+    def test_rolling_origin_evaluation(self):
+        metrics, comparison = rolling_origin_evaluation(self.series)
+        self.assertEqual(set(metrics["Model"]), {"GPR", "Seasonal Naive"})
+        self.assertEqual(len(comparison), 4)
+        self.assertTrue(np.isfinite(metrics[["MAE", "RMSE", "MAPE (%)"]]).all().all())
 
-    def test_comparison_and_future(self):
-        summary, actual_vs_pred, _ = evaluate_models(self.series, test_days=30)
-        self.assertEqual(set(summary['Model']), {'Seasonal Naive','Random Forest','LSTM'})
-        self.assertEqual(len(actual_vs_pred),30)
-        self.assertTrue(np.isfinite(summary[['MAE','RMSE']].to_numpy()).all())
-        future = predict_future(self.series,3,'LSTM')
+    def test_three_day_forecast_has_intervals(self):
+        future = forecast_series(self.series, 3)
         self.assertEqual(len(future), 3)
-        self.assertTrue((future['Predicted trips']>=0).all())
+        self.assertTrue((future["Lower 95%"] <= future["Predicted"]).all())
+        self.assertTrue((future["Predicted"] <= future["Upper 95%"]).all())
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
+
