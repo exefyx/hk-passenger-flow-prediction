@@ -42,6 +42,8 @@ The covariance kernel is:
 
 Validation uses an expanding time window. Days 1-7 predict day 8, days 1-8 predict day 9, and so on through day 11. This produces only four validation forecasts, so the metrics are exploratory.
 
+When the official source contains observations for 12-14 November, the application shows a separate post-forecast audit. Those values are never supplied to model fitting.
+
 ## Run locally
 
 ```bash
