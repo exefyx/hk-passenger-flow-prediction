@@ -160,7 +160,38 @@ chart.add_trace(go.Scatter(x=forecast["Date"], y=forecast["Total lower 95%"], fi
 chart.update_layout(xaxis_title="Date", yaxis_title="Passenger trips", hovermode="x unified")
 st.plotly_chart(chart, use_container_width=True)
 
-st.subheader("03 Time-ordered validation")
+audit_dates = pd.DatetimeIndex(forecast["Date"])
+audit_raw = raw.loc[raw["date"].isin(audit_dates)]
+audit_pivot = audit_raw.groupby(["date", "direction"])["total"].sum().unstack()
+if {"arrival", "departure"}.issubset(audit_pivot.columns) and audit_pivot.index.equals(audit_dates):
+    audit = pd.DataFrame(
+        {
+            "Date": audit_dates,
+            "Forecast total": forecast["Total"].to_numpy(),
+            "Observed total": (audit_pivot["arrival"] + audit_pivot["departure"]).to_numpy(),
+        }
+    )
+    audit["Absolute error"] = (audit["Observed total"] - audit["Forecast total"]).abs()
+    audit["Absolute percentage error (%)"] = 100 * audit["Absolute error"] / audit["Observed total"]
+    audit["Inside 95% interval"] = (
+        (audit["Observed total"].to_numpy() >= forecast["Total lower 95%"].to_numpy())
+        & (audit["Observed total"].to_numpy() <= forecast["Total upper 95%"].to_numpy())
+    )
+    st.subheader("03 Post-forecast audit")
+    st.caption(
+        "These observations were released after the 1-11 November training window and are used only for evaluation."
+    )
+    audit_display = audit.copy()
+    audit_display["Date"] = audit_display["Date"].dt.strftime("%Y-%m-%d")
+    for column in ("Forecast total", "Observed total", "Absolute error"):
+        audit_display[column] = audit_display[column].round(0).astype(int)
+    audit_display["Absolute percentage error (%)"] = audit_display["Absolute percentage error (%)"].round(2)
+    st.dataframe(audit_display, hide_index=True, use_container_width=True)
+    x, y = st.columns(2)
+    x.metric("Three-day total MAE", f"{audit['Absolute error'].mean():,.0f}")
+    y.metric("Three-day total MAPE", f"{audit['Absolute percentage error (%)'].mean():.2f}%")
+
+st.subheader("04 Time-ordered validation")
 st.caption(
     "Days 8-11 are forecast one at a time. Each model is refitted using only earlier observations. "
     "Four validation points are enough for a demonstration, not for a production accuracy claim."
@@ -176,7 +207,7 @@ with right:
     st.markdown("**Total**")
     st.dataframe(total_metrics.round(2), hide_index=True, use_container_width=True)
 
-st.subheader("04 Interpretation and project boundary")
+st.subheader("05 Interpretation and project boundary")
 st.markdown(
     """
 The periodic GPR is a supervised probabilistic model. It learns the similarity between observed days and returns both a mean forecast and uncertainty. The weekly period is fixed at seven days because eleven observations cannot identify seasonality reliably.
