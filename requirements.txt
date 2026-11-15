@@ -4,4 +4,4 @@ numpy>=1.26,<3
 requests>=2.31,<3
 plotly>=5.20,<7
 scikit-learn>=1.4,<2
-torch>=2.2,<3
+
